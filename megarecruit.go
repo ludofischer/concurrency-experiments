@@ -7,9 +7,11 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
-func analyzeUser(user *twitter.User) {
-	log.Print(user.Location)
-	log.Print(user.ScreenName)
+func analyzeUser(userChannel <-chan twitter.User) {
+	for user := range userChannel {
+		log.Print(user.Location)
+		log.Print(user.ScreenName)
+	}
 }
 
 func getUsers(client *twitter.Client, cursor int64) (*twitter.Followers, error) {
@@ -23,16 +25,21 @@ func main() {
 	config := &clientcredentials.Config{}
 	httpClient := config.Client(oauth2.NoContext)
 	client := twitter.NewClient(httpClient)
+	userChan := make(chan twitter.User)
+
+	go analyzeUser(userChan)
+
 	for {
 		followers, err := getUsers(client, cursor)
 		if err != nil {
 			log.Fatalf("Error communicating with Twitter %s", err)
 		}
 		for _, user := range followers.Users {
-			analyzeUser(&user)
+			userChan <- user
 		}
 		cursor = followers.NextCursor
 		if cursor == 0 {
+			close(userChan)
 			break
 		}
 	}
